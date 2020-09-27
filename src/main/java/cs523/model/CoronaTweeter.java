@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 @Data
 @AllArgsConstructor
@@ -15,11 +15,11 @@ public class CoronaTweeter implements Serializable {
 	private String userName;
 	private String screenName;
 	private String location;
-	private LocalDateTime tweetAt;
+	private LocalDate tweetAt;
 	private String originalTweet;
 	private String sentiment;
 
-	public static CoronaTweeter of(String userName, String screenName, String location, LocalDateTime tweetAt, String originalTweet, String sentiment) {
+	public static CoronaTweeter of(String userName, String screenName, String location, LocalDate tweetAt, String originalTweet, String sentiment) {
 		return new CoronaTweeter(userName, screenName, location, tweetAt, originalTweet, sentiment);
 	}
 

@@ -20,6 +20,7 @@ import scala.Tuple2;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -29,12 +30,12 @@ import java.util.StringJoiner;
 @Log4j
 public class CoronaTweeterRepository implements Serializable {
 
-	private static final long serialVersionUID = 1L;
+	public static final long serialVersionUID = 1L;
 
-	private static CoronaTweeterRepository instance;
+	public static CoronaTweeterRepository instance;
 
-	private static final String TABLE_NAME = "corona_tweeter";
-	private static final String CF = "cf";
+	public static final String TABLE_NAME = "corona_tweeter";
+	public static final String CF = "cf";
 
 	public static final String C_USER_NAME = "userName";
 	public static final String C_SCREEN_NAME = "screenName";
@@ -43,7 +44,7 @@ public class CoronaTweeterRepository implements Serializable {
 	public static final String C_ORIGINAL_TWEET = "originalTweet";
 	public static final String C_SENTIMENT = "sentiment";
 
-	private final static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+	public final static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
 
 	private CoronaTweeterRepository() {}
 
@@ -116,7 +117,7 @@ public class CoronaTweeterRepository implements Serializable {
 					Bytes.toString(value1),
 					Bytes.toString(value2),
 					Bytes.toString(value3),
-					LocalDateTime.parse(Bytes.toString(value4), formatter),
+					LocalDate.parse(Bytes.toString(value4), formatter),
 					Bytes.toString(value5), Bytes.toString(value6)
 
 			);

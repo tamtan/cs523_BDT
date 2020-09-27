@@ -15,96 +15,45 @@ import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import org.apache.spark.streaming.kafka.KafkaUtils;
 import org.apache.hadoop.hbase.client.*;
 
-import cs523.hbase.AirConditionRepository;
 import cs523.hbase.HbaseConnection;
-import cs523.model.AirQuality;
 import cs523.model.Parser;
-import cs523.sparksql.AirQualityReview;
+import cs523.sparksql.CoronaReview;
 
-import cs523.config.IKafkaConstants;
+import cs523.config.Constants;
 import kafka.serializer.StringDecoder;
+
+import static cs523.config.Constants.APP_NAME;
+import static cs523.config.Constants.MASTER;
 
 public class App {
 
-	public static void main(String[] args) throws IOException, InterruptedException {
+	public static void main(String[] args) {
 		try (Connection connection = HbaseConnection.getInstance()) {
-			System.out.println("tan vinh tam connected");
-
-			SparkConf sparkConf = new SparkConf().setMaster("local[*]").setAppName("FinalProject");
+			SparkConf sparkConf = new SparkConf().setMaster(MASTER).setAppName(APP_NAME);
 			JavaSparkContext sc = new JavaSparkContext(sparkConf);
-
 			CoronaTweeterRepository repo = CoronaTweeterRepository.getInstance();
 			repo.createTable();
+            streamingFromKafka(sc);
 
-			String mode = "kafka";
-			if (args.length > 0) mode = args[0];
-			if (mode.equals("s3")) streamingFromS3(sc);
-			if (mode.equals("sql")) sparkSql(sc);
-			if (mode.equals("kafka")) streamingFromKafka(sc);
+//			String mode = "kafka";
+//			String mode = "sql";
+//			if (args.length > 0) mode = args[0];
+//			if (mode.equals("sql")) sparkSql(sc);
+//			if (mode.equals("kafka")) streamingFromKafka(sc);
 		}catch (Exception e){
 			System.out.println(e.getMessage());
 		}
 	}
 
-	public static void streamingFromS3(JavaSparkContext sc) throws InterruptedException {
-		Configuration hadoopConf = sc.hadoopConfiguration();
-		hadoopConf.set("fs.s3a.access.key", "AKIAIEKMELN37QBVV5KA");
-		hadoopConf.set("fs.s3a.secret.key", "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");
-
-		AirConditionRepository repo = AirConditionRepository.getInstance();
-		repo.createTable();
-
-		try (JavaStreamingContext ssc = new JavaStreamingContext(sc, new Duration(5000))) {
-			JavaDStream<String> streamOfRecords = ssc.textFileStream("s3a://air-quality-live");
-			streamOfRecords.print();
-
-			JavaDStream<AirQuality> recoredRDDs = streamOfRecords.map(Parser::parse);
-
-			recoredRDDs.foreachRDD(rdd -> {
-				if (!rdd.isEmpty()) {
-					repo.save(hadoopConf, rdd);
-				}
-			});
-			ssc.start();
-			ssc.awaitTermination();
-		}
-	}
-
-	public static void streamingFromKafka1(JavaSparkContext sc) throws InterruptedException {
-		AirConditionRepository repo = AirConditionRepository.getInstance();
-		Map<String, String> kafkaParams = new HashMap<String, String>();
-		kafkaParams.put("bootstrap.servers", IKafkaConstants.KAFKA_BROKERS);
-		kafkaParams.put("fetch.message.max.bytes", String.valueOf(IKafkaConstants.MESSAGE_SIZE));
-		Set<String> topicName = Collections.singleton(IKafkaConstants.TOPIC);
-		Configuration hadoopConf = sc.hadoopConfiguration();
-
-		try (JavaStreamingContext streamingContext = new JavaStreamingContext(sc, new Duration(5000))) {
-			JavaPairInputDStream<String, String> kafkaSparkPairInputDStream = KafkaUtils.createDirectStream(
-				streamingContext, String.class,
-				String.class, StringDecoder.class, StringDecoder.class, kafkaParams, topicName);
-			JavaDStream<AirQuality> recoredRDDs = kafkaSparkPairInputDStream.map(Parser::parse);
-			recoredRDDs.foreachRDD(rdd -> {
-				if (!rdd.isEmpty()) {
-					repo.save(hadoopConf, rdd);
-				}
-			});
-
-			streamingContext.start();
-			streamingContext.awaitTermination();
-		}
-	}
-
-
-    public static void streamingFromKafka(JavaSparkContext sc) throws InterruptedException {
-		System.out.println("tan vinh tam streamingFromKafka");
+    public static void streamingFromKafka(JavaSparkContext sc) {
         CoronaTweeterRepository repo = CoronaTweeterRepository.getInstance();
         Map<String, String> kafkaParams = new HashMap<String, String>();
-        kafkaParams.put("bootstrap.servers", IKafkaConstants.KAFKA_BROKERS);
-        kafkaParams.put("fetch.message.max.bytes", String.valueOf(IKafkaConstants.MESSAGE_SIZE));
-        Set<String> topicName = Collections.singleton(IKafkaConstants.TOPIC);
+        kafkaParams.put("bootstrap.servers", Constants.KAFKA_BROKERS);
+        kafkaParams.put("fetch.message.max.bytes", String.valueOf(Constants.MESSAGE_SIZE));
+        Set<String> topicName = Collections.singleton(Constants.TOPIC);
         Configuration hadoopConf = sc.hadoopConfiguration();
 
-        try (JavaStreamingContext streamingContext = new JavaStreamingContext(sc, new Duration(5000))) {
+        try (JavaStreamingContext streamingContext = new JavaStreamingContext(sc, new Duration(1000))) {
             JavaPairInputDStream<String, String> kafkaSparkPairInputDStream = KafkaUtils.createDirectStream(
                     streamingContext, String.class,
                     String.class, StringDecoder.class, StringDecoder.class, kafkaParams, topicName);
@@ -121,32 +70,9 @@ public class App {
     }
 
     public static void sparkSql(JavaSparkContext jsc) throws IOException{
-		AirQualityReview.ReadRecords(jsc, getKeyFromFile("keys.txt"));
-		// top five air polution
-		AirQualityReview.TopAirPolution();
-		// best five air quality by country
-		AirQualityReview.BestFiveAirQualityByCountry("US");
-		// average air quality by date
-		AirQualityReview.AverageAirQualityFromDate("2015-01-01 00:00:01");
-		// air quality index by city
-		AirQualityReview.AirQualityIndexFilterByCity("Detroit", "2015-01-01 00:00:01");
-		// air quality index by location
-		AirQualityReview.AirQualityIndexFilterByLocation("DET POLICE 4TH", "2015-01-01 00:00:01");
-	}
-
-	public static String[] getKeyFromFile(String input){
-		List<String> keys = new ArrayList<String>();
-		try {
-			BufferedReader reader = new BufferedReader(new FileReader(input));
-			String line = reader.readLine();
-			while (line != null) {
-				keys.add(line);
-				line = reader.readLine();
-			}
-			reader.close();
-		}catch(IOException ignore) {
-			ignore.printStackTrace();
-		}
-		return keys.stream().toArray(String[]::new);
+//		CoronaReview.ReadRecords(jsc);
+//		CoronaReview.GetFirst15Record();
+//		CoronaReview.GetFirst15PositiveCase();
+//		CoronaReview.CountNumberOfCorrespondingCases();
 	}
 }
